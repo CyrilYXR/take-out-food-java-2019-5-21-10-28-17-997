@@ -1,3 +1,6 @@
+import com.sun.deploy.util.StringUtils;
+
+import java.util.ArrayList;
 import java.util.List;
 
 /*
@@ -15,6 +18,162 @@ public class App {
     public String bestCharge(List<String> inputs) {
         //TODO: write code here
 
-        return null;
+        List<Item> itemList = itemRepository.findAll();
+        List<SalesPromotion> salesPromotions = salesPromotionRepository.findAll();
+
+        // 订单项实体类
+        class OrderItem {
+            private Item item;   // 菜品实体
+            private Integer num;  // 数量
+            private double cost;  // 花费
+            private Boolean isDiscount = false;  // 是否是折扣商品
+
+            public double getCost() {
+                return cost;
+            }
+
+            public void setCost(double cost) {
+                this.cost = cost;
+            }
+
+            public Item getItem() {
+                return item;
+            }
+
+            public void setItem(Item item) {
+                this.item = item;
+            }
+
+            public Integer getNum() {
+                return num;
+            }
+
+            public void setNum(Integer num) {
+                this.num = num;
+            }
+
+            public Boolean getDiscount() {
+                return isDiscount;
+            }
+
+            public void setDiscount(Boolean discount) {
+                isDiscount = discount;
+            }
+        }
+
+        // 账单实体
+        class Bill {
+            private String discountName;
+            private double realPay;
+            private double discountMoney;
+            private List<String> discountItems;
+
+            public List<String> getDiscountItems() {
+                return discountItems;
+            }
+
+            public void setDiscountItems(List<String> discountItems) {
+                this.discountItems = discountItems;
+            }
+
+            public String getDiscountName() {
+                return discountName;
+            }
+
+            public void setDiscountName(String discountName) {
+                this.discountName = discountName;
+            }
+
+            public double getRealPay() {
+                return realPay;
+            }
+
+            public void setRealPay(double realPay) {
+                this.realPay = realPay;
+            }
+
+            public double getDiscountMoney() {
+                return discountMoney;
+            }
+
+            public void setDiscountMoney(double discountMoney) {
+                this.discountMoney = discountMoney;
+            }
+        }
+
+        // 订单列表
+        List<OrderItem> orderList = new ArrayList<>();
+        // 获取订单列表
+        for(String input : inputs){
+            OrderItem orderItem = new OrderItem();
+            String[] split = input.split("x");
+            orderItem.setNum(Integer.valueOf(split[1].trim()));
+
+            String inputItemId = split[0].trim();
+
+            for(Item item : itemList) {
+                if(item.getId().equals(inputItemId)) {
+                    orderItem.setItem(item);
+                    orderItem.setCost(item.getPrice() * orderItem.getNum());
+                    orderList.add(orderItem);
+                    break;
+                }
+            }
+        }
+
+        double totalMoney = 0;   //使用优惠前订单总费用
+        double discounts = 0;  //优惠了多少钱
+        for(OrderItem item : orderList) {
+            totalMoney += item.getCost();
+        }
+
+        Bill bill = new Bill();
+        for (SalesPromotion promotion : salesPromotions) {
+            if (promotion.getType().equals("50%_DISCOUNT_ON_SPECIFIED_ITEMS")) {
+                List<String> discountItems = new ArrayList<>();
+                for (OrderItem item : orderList) {
+                    for (String relatedItem : promotion.getRelatedItems()) {
+                        if (item.getItem().getId().equals(relatedItem)) {
+                            discounts += (item.getItem().getPrice() / 2);
+                            discountItems.add(item.getItem().getName());
+                        }
+                    }
+                    bill.setDiscountName(promotion.getDisplayName());
+                    bill.setDiscountItems(discountItems);
+                    bill.setDiscountMoney(discounts);
+                    bill.setRealPay(totalMoney - discounts);
+                }
+            }
+        }
+        for (SalesPromotion promotion : salesPromotions) {
+            if (promotion.getType().equals("BUY_30_SAVE_6_YUAN") && totalMoney > 30 && discounts < 6) {
+                bill.setDiscountName(promotion.getDisplayName());
+                bill.setDiscountMoney(6);
+                bill.setRealPay(totalMoney - 6);
+                bill.setDiscountItems(null);
+            }
+        }
+
+        StringBuffer output = new StringBuffer();
+        output.append("============= 订餐明细 =============\n");
+        for(OrderItem item : orderList) {
+            output.append(item.getItem().getName()).append(" x ").append(item.getNum()).append(" = ").append((int)item.getCost()).append("元\n");
+        }
+        output.append("-----------------------------------\n");
+
+        if(bill.getDiscountMoney() > 0) {
+            output.append("使用优惠:\n")
+                    .append(bill.getDiscountName());
+            if(bill.getDiscountName().equals("指定菜品半价")) {
+                output.append("(").append(StringUtils.join(bill.getDiscountItems(), "，")).append(")");
+            }
+
+            output.append("，省").append((int)bill.getDiscountMoney()).append("元\n")
+                    .append("-----------------------------------\n");
+        }
+        output.append("总计：").append((int)bill.getRealPay()).append("元\n")
+                .append("===================================");
+
+        return output.toString();
     }
 }
